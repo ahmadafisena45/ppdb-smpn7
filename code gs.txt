@@ -1,0 +1,94 @@
+// ==========================================
+// BACKEND GOOGLE APPS SCRIPT UNTUK PPDB
+// ==========================================
+
+const NAMA_SHEET = "Data Pendaftar";
+
+// Fungsi untuk menyiapkan Header di Google Sheets (Jalankan sekali di awal)
+function setupSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(NAMA_SHEET);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(NAMA_SHEET);
+  }
+  
+  // Jika sheet kosong, buat header
+  if (sheet.getLastRow() === 0) {
+    const headers = [
+      "Waktu Daftar", "NISN", "NIK", "Nama Lengkap", 
+      "Tempat Lahir", "Tanggal Lahir", "Jenis Kelamin", 
+      "Alamat", "Asal Sekolah", "No HP/WA", "Email", "Status"
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#d0e0e3");
+    sheet.setFrozenRows(1);
+  }
+}
+
+// Fungsi untuk menangani request POST (Untuk pendaftaran baru)
+function doPost(e) {
+  try {
+    // Parse data JSON yang dikirim dari Frontend (Aplikasi)
+    const data = JSON.parse(e.postData.contents);
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(NAMA_SHEET);
+    
+    // Pastikan sheet ada
+    if (!sheet) {
+      setupSheet();
+      sheet = ss.getSheetByName(NAMA_SHEET);
+    }
+
+    // --- VALIDASI NISN GANDA ---
+    const allData = sheet.getDataRange().getValues();
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][1].toString() === data.nisn.toString()) {
+        return createJsonResponse({ 
+          success: false, 
+          message: "Pendaftaran Gagal: NISN ini sudah terdaftar." 
+        });
+      }
+    }
+
+    // --- SIMPAN DATA BARU ---
+    const barisBaru = [
+      new Date(),           // Waktu Daftar
+      data.nisn,
+      data.nik,
+      data.nama,
+      data.tempatLahir,
+      data.tanggalLahir,
+      data.jenisKelamin,
+      data.alamat,
+      data.asalSekolah,
+      data.noHp,
+      data.email || "-",
+      "Diproses"            // Status Default
+    ];
+
+    sheet.appendRow(barisBaru);
+
+    return createJsonResponse({ 
+      success: true, 
+      message: "Pendaftaran berhasil disimpan ke Google Sheets!" 
+    });
+
+  } catch (error) {
+    return createJsonResponse({ 
+      success: false, 
+      message: "Terjadi kesalahan server: " + error.toString() 
+    });
+  }
+}
+
+// Fungsi bantuan untuk membuat response JSON dengan CORS Header
+function createJsonResponse(responseObject) {
+  return ContentService.createTextOutput(JSON.stringify(responseObject))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function doGet() {
+  return ContentService.createTextOutput("Backend PPDB Aktif!")
+    .setMimeType(ContentService.MimeType.TEXT);
+}
